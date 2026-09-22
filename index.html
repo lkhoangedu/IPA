@@ -1508,7 +1508,7 @@ function advise(r) {
   const notes = [];
   if (r.ranOff) notes.push('your writing ran off the edge of the pad, so part of it could not be read — write a little smaller');
   if (r.missing.length === 1) notes.push(`${describeStroke(r.missing[0].st, r.multi)} is missing — it is marked in red on the pad`);
-  else if (r.missing.length > 1) notes.push(`${r.missing.length} strokes are missing — they are marked in red on the pad`);
+  else if (r.missing.length > 1) { const names = r.missing.map(p => describeStroke(p.st, r.multi)); const shown = names.slice(0, 3); const list = shown.length === 2 ? shown.join(' and ') : `${shown.slice(0, -1).join(', ')}, and ${shown.at(-1)}`; const more = names.length > shown.length ? `, plus ${names.length - shown.length} more` : ''; notes.push(`${list}${more} are missing — each is marked in red on the pad`); }
   else if (r.partial.length === 1) notes.push(`${describeStroke(r.partial[0].st, r.multi)} is only half formed`);
   else if (r.partial.length > 1) notes.push(`${r.partial.length} strokes stop short — they are marked in amber on the pad`);
 
@@ -2028,10 +2028,10 @@ let resizeTimer = 0;
 const relayout = () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
-    const wasPlaying = state.playing;
+    const wasPlaying = state.playing; const coverage = state.diff?.map(p => p.covered) || null;
     stopWriting(false);
-    state.diff = null; setLegend(null);      // marked in old pad pixels; no longer valid
-    measurePad(); drawPaper(); redrawInk(); renderGuide();
+    measurePad(); if (coverage) { state.diff = fitStrokes(fit).map((st, i) => ({ st, covered: coverage[i] ?? 0 })); setLegend({ missing: state.diff.filter(p => p.covered < .62), partial: state.diff.filter(p => p.covered >= .62 && p.covered < .86) }); } else setLegend(null);
+    drawPaper(); redrawInk(); renderGuide();
     if (wasPlaying) playWriting();
   }, 90);
 };
