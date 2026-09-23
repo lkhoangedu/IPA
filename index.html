@@ -1262,8 +1262,32 @@ function paintSegment(a, b) {
 }
 function paintDot(p) {
   ictx.fillStyle = INK;
-  ictx.beginPath(); ictx.arc(p.x, p.y, p.w / 2, 0, Math.PI * 2); ictx.fill();
+  ictx.beginPath(); ictx.arc(p.x, p.y, p.w / 2, 0, Math.PI * 2); ictx.fill();}
+
+/** Keep the learner's ink registered to the model when the pad is resized. */
+function remapStrokesForLayout(strokes, from, to, oldW, oldH, newW, newH) {
+  if (!from || !to || !strokes.length || from.scale <= 0 || to.scale <= 0) return;
+  const oldRows = from.lay.rows.length, newRows = to.lay.rows.length;
+  if (oldRows === newRows) {
+    const ratio = to.scale / from.scale;
+    strokes.forEach(stroke => stroke.forEach(p => {
+      let row = 0, nearest = Infinity;
+      for (let i = 0; i < oldRows; i++) {
+        const distance = Math.abs(p.y - from.rowTop(i));
+        if (distance < nearest) { nearest = distance; row = i; }
+      }
+      p.x = to.rowX(row) + (p.x - from.rowX(row)) * ratio;
+      p.y = to.rowTop(row) + (p.y - from.rowTop(row)) * ratio;
+      p.w = Math.max(1, p.w * ratio);
+    }));
+    return;
+  }
+  const sx = newW / Math.max(1, oldW), sy = newH / Math.max(1, oldH);
+  strokes.forEach(stroke => stroke.forEach(p => {
+    p.x *= sx; p.y *= sy; p.w = Math.max(1, p.w * Math.min(sx, sy));
+  }));
 }
+
 function redrawInk() {
   ictx.clearRect(0, 0, padW, padH);
   for (const st of strokesDrawn) {
@@ -2029,8 +2053,11 @@ const relayout = () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
     const wasPlaying = state.playing; const coverage = state.diff?.map(p => p.covered) || null;
+    const previousFit = fit, previousW = padW, previousH = padH;
     stopWriting(false);
-    measurePad(); if (coverage) { state.diff = fitStrokes(fit).map((st, i) => ({ st, covered: coverage[i] ?? 0 })); setLegend({ missing: state.diff.filter(p => p.covered < .62), partial: state.diff.filter(p => p.covered >= .62 && p.covered < .86) }); } else setLegend(null);
+    measurePad();
+    remapStrokesForLayout(strokesDrawn, previousFit, fit, previousW, previousH, padW, padH);
+    if (coverage) { state.diff = fitStrokes(fit).map((st, i) => ({ st, covered: coverage[i] ?? 0 })); setLegend({ missing: state.diff.filter(p => p.covered < .62), partial: state.diff.filter(p => p.covered >= .62 && p.covered < .86) }); } else setLegend(null);
     drawPaper(); redrawInk(); renderGuide();
     if (wasPlaying) playWriting();
   }, 90);
